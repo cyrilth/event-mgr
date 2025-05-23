@@ -3,56 +3,84 @@ import { users } from "../../../lib/data/sampleData";
 import { useAppDispatch, useAppSelector } from "../../../lib/stores/store";
 import type { AppEvent } from "../../../lib/types";
 import { createEvent, selectEvent, updateEvent } from "../eventSlice";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
+import { useForm, type FieldValues } from "react-hook-form";
+import TextInput from "../../../app/shared/components/TextInput";
+import {
+  eventFormSchema,
+  type EventFormSchema,
+} from "../../../lib/schemas/eventFormSchema";
+import { zodResolver } from "@hookform/resolvers/zod";
+import TextArea from "../../../app/shared/components/TextArea";
+import SelectInput from "../../../app/shared/components/SelectInput";
+import { categoryOptions } from "./categoryOptions";
+import PlaceInput from "../../../app/shared/components/PlaceInput";
 
 export default function EventForm() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const dispatch = useAppDispatch();
   const selectedEvent = useAppSelector((state) => state.event.selectedEvent);
-  const formRef = useRef<HTMLFormElement>(null);
-
-  const initialValues = selectedEvent ?? {
-    title: "",
-    category: "",
-    description: "",
-    date: "",
-    city: "",
-    venue: "",
-  };
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { isValid },
+  } = useForm<EventFormSchema>({
+    mode: "onTouched",
+    resolver: zodResolver(eventFormSchema),
+  });
 
   useEffect(() => {
     if (id) {
       dispatch(selectEvent(id));
+      if (selectedEvent) {
+        reset({
+          ...selectedEvent,
+          date: new Date(selectedEvent.date).toISOString().slice(0, 16),
+          venue: {
+            venue: selectedEvent.venue,
+            latitude: selectedEvent.latitude,
+            longitude: selectedEvent.longitude,
+          },
+        });
+      }
     } else {
       dispatch(selectEvent(null));
-      formRef.current?.reset();
     }
-  }, [dispatch, id]);
+  }, [dispatch, id, selectedEvent, reset]);
 
-  const onSubmit = (formData: FormData) => {
-    const data = Object.fromEntries(formData.entries()) as unknown as AppEvent;
-
+  const onSubmit = (data: FieldValues) => {
     if (selectedEvent) {
-      dispatch(updateEvent({ ...selectedEvent, ...data }));
+      dispatch(
+        updateEvent({
+          ...selectedEvent,
+          ...data,
+          venue: data.venue.venue,
+          latitude: data.venue.latitude,
+          longitude: data.venue.longitude,
+        })
+      );
       navigate(`/events/${selectedEvent.id}`);
     } else {
       const id = crypto.randomUUID();
-      dispatch(
-        createEvent({
-          ...data,
-          id,
-          hostUid: users[0].uid,
-          attendees: [
-            {
-              id: users[0].uid,
-              displayName: users[0].displayName,
-              photoURL: users[0].photoURL,
-              isHost: true,
-            },
-          ],
-        })
-      );
+      const newEvent = {
+        ...data,
+        id,
+        venue: data.venue.venue,
+        latitude: data.venue.latitude,
+        longitude: data.venue.longitude,
+        hostUid: users[0].uid,
+        attendees: [
+          {
+            id: users[0].uid,
+            displayName: users[0].displayName,
+            photoURL: users[0].photoURL,
+            isHost: true,
+          },
+        ],
+      };
+      dispatch(createEvent(newEvent as AppEvent));
       navigate(`/events/${id}`);
     }
   };
@@ -63,55 +91,34 @@ export default function EventForm() {
         {selectedEvent ? "Edit Event" : "Create Event"}
       </h3>
       <form
-        ref={formRef}
-        action={onSubmit}
-        className="flex flex-col gap-3 w-full"
+        onSubmit={handleSubmit(onSubmit)}
+        className="flex flex-col gap-6 w-full"
       >
-        <input
-          defaultValue={initialValues.title}
-          name="title"
-          type="text"
-          className="input input-lg w-full"
-          placeholder="Event title"
-        />
-        <input
-          defaultValue={initialValues.category}
-          name="category"
-          type="text"
-          className="input input-lg w-full"
-          placeholder="Category"
-        />
-        <textarea
-          defaultValue={initialValues.description}
+        <TextInput control={control} name="title" label="Title" />
+
+        <TextArea
+          control={control}
           name="description"
-          className="textarea textarea-lg w-full"
-          placeholder="Description"
+          label="Description"
+          rows={3}
         />
-        <input
-          defaultValue={
-            initialValues.date
-              ? new Date(initialValues.date).toISOString().slice(0, 16)
-              : ""
-          }
-          name="date"
-          type="datetime-local"
-          className="input input-lg w-full"
-          placeholder="Date"
-        />
-        <input
-          defaultValue={initialValues.city}
-          name="city"
-          type="text"
-          className="input input-lg w-full"
-          placeholder="City"
-        />
-        <input
-          defaultValue={initialValues.venue}
-          name="venue"
-          type="text"
-          className="input input-lg w-full"
-          placeholder="Venue"
-        />
+        <div className="flex gap-3 items-center w-full">
+          <SelectInput
+            control={control}
+            name="category"
+            label="Category"
+            options={categoryOptions}
+          />
+          <TextInput
+            control={control}
+            name="date"
+            label="Date"
+            type="datetime-local"
+            min={new Date()}
+          />
+        </div>
+
+        <PlaceInput control={control} name="venue" label="Venue" />
         <div className="flex justify-end w-full gap-3">
           <button
             onClick={() => navigate(-1)}
@@ -120,7 +127,7 @@ export default function EventForm() {
           >
             Cancel
           </button>
-          <button type="submit" className="btn btn-primary">
+          <button disabled={!isValid} type="submit" className="btn btn-primary">
             Submit
           </button>
         </div>
