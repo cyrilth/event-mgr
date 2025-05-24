@@ -15,7 +15,7 @@ export default function LoginForm() {
     control,
     handleSubmit,
     formState: { isValid },
-  } = useForm({
+  } = useForm<LoginSchema>({
     resolver: zodResolver(loginSchema),
   });
 
