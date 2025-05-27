@@ -125,7 +125,7 @@ export default function EventForm() {
             name="date"
             label="Date"
             type="datetime-local"
-            min={new Date()}
+            // min={new Date()}
           />
         </div>
 
